@@ -1,6 +1,6 @@
 section .multiboot_header align=8
 header_start:
-    ; magic number
+    ; magic numbah :O
     dd 0xE85250D6 ; multiboot2
     ; architecture
     dd 0 ; protected mode i386

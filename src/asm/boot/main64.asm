@@ -1,6 +1,6 @@
 global long_mode_start
 extern kernel_main
-extern call_constructors
+
 
 section .text
 [BITS 64]
