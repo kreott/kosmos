@@ -2,13 +2,12 @@
 #![no_main]
 #![feature(abi_x86_interrupt)]
 
-
 use core::panic::PanicInfo; // panic info structure
 
 pub mod interrupts; // interrupt handling
-pub mod serial;
-pub mod vga;
-
+pub mod serial; // serial output
+pub mod vga; // vga output
+pub mod gdt; // gdt handling
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -16,23 +15,30 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
+pub fn init() {
+    gdt::init(); // init gdt
+    interrupts::init_idt(); // init idt
+    unsafe { interrupts::PICS.lock().initialize() }; // init PICS
+    x86_64::instructions::interrupts::enable(); // enable interrupts
+}
+
+
 #[unsafe(no_mangle)] // dont mangle the name of this function
 pub extern "C" fn kernel_main() -> ! {
+
+    // initialize important things like gdt and interrupts
+    init();
+    
+    vgaclear!();
     println!("Hello World{}", "!");
     serial_print!("Hello Serial{}", "!");
 
-    // initialize cpu interrupts
-    interrupts::init_idt();
+    
+    println!("Working vga yippie!!! :D");
 
-    x86_64::instructions::interrupts::int3();
 
-    unsafe {
-        *(0xDEADBEEF as *mut u8) = 42;
+    loop {
+        
     }
-
-    println!("It did not crash!");
-    serial_print!("Serial Test! yippie");
-
-    loop {}
-}
+} // fn kernel_main
 
