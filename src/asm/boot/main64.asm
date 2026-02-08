@@ -1,5 +1,6 @@
 global long_mode_start
-extern kernel_main
+extern _start
+extern boot_info
 
 
 section .text
@@ -16,7 +17,8 @@ long_mode_start:
     mov fs, ax
     mov gs, ax
 
-    call kernel_main
+    mov rdi, boot_info   ; use boot_info as first argument to _start
+    call _start
 
 .halt:
     hlt

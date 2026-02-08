@@ -1,6 +1,41 @@
 global start
+global boot_info
+%define PHYS_OFFSET 0xFFFF800000000000
 extern long_mode_start
 
+section .data
+align 16
+
+; BootInfo struct
+boot_info:
+    dq 0                   ; api_version = 0
+    dq memory_regions      ; ptr to MemoryRegions array
+    dq 1                   ; len = 1
+    dq 0                   ; framebuffer = None
+    dq PHYS_OFFSET         ; physical_memory_offset
+    dq 0                   ; recursive_index = None
+    dq 0                   ; rsdp_addr = None
+    dq 0                   ; tls_template = None
+    dq 0                   ; ramdisk_addr = None
+    dq 0                   ; ramdisk_len
+    dq 0                   ; kernel_addr
+    dq 0                   ; kernel_len
+    dq 0                   ; kernel_image_offset
+    dq 0                   ; kernel_stack_bottom
+    dq 0                   ; kernel_stack_len
+    dq 0                   ; _test_sentinel
+
+; FFI-safe MemoryRegions struct
+memory_regions:
+    dq memory_region_0      ; pointer to first MemoryRegion
+    dq 1                    ; number of regions
+
+; MemoryRegion itself
+memory_region_0:
+    dq 0x100000             ; start = 1 MiB
+    dq 0x40000000           ; end = 1 GiB
+    dq 0                    ; kind = Usable
+    
 section .text
 [BITS 32]
 start:
@@ -17,7 +52,6 @@ start:
     jmp gdt64.code_segment:long_mode_start
 
     hlt
-
 
 check_multiboot:
     cmp eax, 0x36D76289 ; magic numbah :O
@@ -66,25 +100,28 @@ check_long_mode:
 
 ; setup paging
 setup_page_tables:
-    mov eax, page_table_l3
-    or eax, 0b11 ; present, writable
-    mov [page_table_l4], eax
+    ; L4 -> L3
+    mov eax, page_table_l3       ; physical addr of L3
+    or eax, 0b11                 ; present + writable
+    mov [page_table_l4], eax     ; first L4 entry points to L3
 
-    mov eax, page_table_l2
-    or eax, 0b11 ; present, writable
-    mov [page_table_l3], eax
+    ; L3 -> L2
+    mov eax, page_table_l2       ; physical addr of L2
+    or eax, 0b11                 ; present + writable
+    mov [page_table_l3], eax     ; first L3 entry points to L2
 
-    mov ecx, 0 ; counter
-.loop:
+    ; L2 -> 2 MiB pages
+    mov ecx, 0
 
-    mov eax, 0x200000 ; 2MiB
-    mul ecx
-    or eax, 0b10000011 ; present, writable, huge page
-    mov [page_table_l2 + ecx * 8], eax
+.loop_l2:
 
-    inc ecx ; increment counter
-    cmp ecx, 512 ; checks if whole table is mapped
-    jne .loop ; if not, continue
+    mov eax, ecx
+    shl eax, 21          ; multiply by 2 MiB
+    or eax, 0b10000011   ; present + writable + huge page
+    mov [page_table_l2 + ecx*8], eax
+    inc ecx
+    cmp ecx, 512
+    jne .loop_l2
 
     ret
 
@@ -114,7 +151,7 @@ enable_paging:
 error:
     ; print "ERR: X" where X is the error code
     mov dword [0xB8000], 0x4F524F45
-    mov byte [0xB8004], 0x4F52
+    mov word [0xB8004], 0x4F52
     hlt
 
 section .bss
@@ -128,8 +165,6 @@ page_table_l2:
 stack_bottom:
     resb 4096 * 4 ; defines a 4 kilobyte stack
 stack_top:
-
-
 
 section .rodata 
 gdt64:
