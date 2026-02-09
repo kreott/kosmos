@@ -1,5 +1,20 @@
-use x86_64::{VirtAddr, structures::paging::{PageTable}};
+use x86_64::{VirtAddr, structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB}};
 use x86_64::PhysAddr;
+use crate::bootinfo::{MemoryRegion, MemoryRegionKind};
+
+
+// Initialize a new OffsetPageTable.
+//
+// This function is unsafe because the caller must guarantee that the
+// complete physical memory is mapped to virtual memory at the passed
+// `physical_memory_offset`. Also, this function must be only called once
+// to avoid aliasing `&mut` references (which is undefined behavior).
+pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
+    unsafe {
+        let level_4_table = active_level_4_table(physical_memory_offset);
+        OffsetPageTable::new(level_4_table, physical_memory_offset)
+    }
+}
 
 // Returns a mutable reference to the active level 4 table.
 //
@@ -7,7 +22,7 @@ use x86_64::PhysAddr;
 // complete physical memory is mapped to virtual memory at the passed
 // `physical_memory_offset`. Also, this function must be only called once
 // to avoid aliasing `&mut` references (which is undefined behavior).
-pub unsafe fn active_level_4_table(physical_memory_offset: VirtAddr)
+unsafe fn active_level_4_table(physical_memory_offset: VirtAddr)
     -> &'static mut PageTable
 {
     use x86_64::registers::control::Cr3;
@@ -75,3 +90,38 @@ fn translate_addr_inner(addr: VirtAddr, physical_memory_offset: VirtAddr)
     // calculate the physical address by adding the page offset
     Some(frame.start_address() + u64::from(addr.page_offset()))
 } // fn translate_addr_inner
+
+// A FrameAllocator that returns usable frames from the bootloader's memory map.
+
+pub struct BootInfoFrameAllocator {
+    regions: &'static [MemoryRegion], // slice of regions
+    next: usize,
+}
+
+impl BootInfoFrameAllocator {
+    /// # Safety
+    /// Caller must guarantee that all frames marked usable are actually free.
+    pub unsafe fn init(regions: &'static [MemoryRegion]) -> Self {
+        BootInfoFrameAllocator {
+            regions,
+            next: 0,
+        }
+    }
+
+    /// Returns an iterator over all usable frames in all regions
+    fn usable_frames(&self) -> impl Iterator<Item = PhysFrame> + '_ {
+        self.regions
+            .iter()
+            .filter(|r| r.kind == MemoryRegionKind::Usable) // use your MemoryRegionKind
+            .flat_map(|r| (r.start..r.end).step_by(4096)) // addresses in 4KiB steps
+            .map(|addr| PhysFrame::containing_address(PhysAddr::new(addr)))
+    }
+}
+
+unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
+    fn allocate_frame(&mut self) -> Option<PhysFrame> {
+        let frame = self.usable_frames().nth(self.next);
+        self.next += 1;
+        frame
+    }
+}

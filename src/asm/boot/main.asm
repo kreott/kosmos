@@ -100,28 +100,33 @@ check_long_mode:
 
 ; setup paging
 setup_page_tables:
-    ; L4 -> L3
-    mov eax, page_table_l3       ; physical addr of L3
-    or eax, 0b11                 ; present + writable
-    mov [page_table_l4], eax     ; first L4 entry points to L3
+    ; L4[0] → L3
+    mov eax, page_table_l3
+    or eax, 0b11                  ; present + writable
+    mov [page_table_l4], eax
 
-    ; L3 -> L2
-    mov eax, page_table_l2       ; physical addr of L2
-    or eax, 0b11                 ; present + writable
-    mov [page_table_l3], eax     ; first L3 entry points to L2
+    ; L3[0] → L2
+    mov eax, page_table_l2
+    or eax, 0b11
+    mov [page_table_l3], eax
 
-    ; L2 -> 2 MiB pages
-    mov ecx, 0
+    ; L2[0] → L1
+    mov eax, page_table_l1
+    or eax, 0b11
+    mov [page_table_l2], eax
 
-.loop_l2:
+    ; Map first 2 MiB using 4 KiB pages
+    mov ecx, 1
 
+.map_l1:
     mov eax, ecx
-    shl eax, 21          ; multiply by 2 MiB
-    or eax, 0b10000011   ; present + writable + huge page
-    mov [page_table_l2 + ecx*8], eax
+    shl eax, 12                   ; ecx * 4096
+    or eax, 0b11                  ; present + writable
+    mov [page_table_l1 + ecx*8], eax
+
     inc ecx
     cmp ecx, 512
-    jne .loop_l2
+    jne .map_l1
 
     ret
 
@@ -161,6 +166,8 @@ page_table_l4:
 page_table_l3:
     resb 4096
 page_table_l2:
+    resb 4096
+page_table_l1:
     resb 4096
 stack_bottom:
     resb 4096 * 4 ; defines a 4 kilobyte stack
