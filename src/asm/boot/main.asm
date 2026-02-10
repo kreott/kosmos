@@ -10,7 +10,7 @@ align 16
 boot_info:
     dq 0                   ; api_version = 0
     dq memory_regions      ; ptr to MemoryRegions array
-    dq 1                   ; len = 1
+    dq 2                   ; len = 2
     dq 0                   ; framebuffer = None
     dq PHYS_OFFSET         ; physical_memory_offset
     dq 0                   ; recursive_index = None
@@ -28,13 +28,19 @@ boot_info:
 ; FFI-safe MemoryRegions struct
 memory_regions:
     dq memory_region_0      ; pointer to first MemoryRegion
-    dq 1                    ; number of regions
+    dq memory_region_1      ; pointer to second MemoryRegion
+    dq 2                    ; number of regions
 
 ; MemoryRegion itself
 memory_region_0:
-    dq 0x100000             ; start = 1 MiB
-    dq 0x40000000           ; end = 1 GiB
-    dq 0                    ; kind = Usable
+    dq 0x00000000
+    dq 0x100000   ; kernel reserved
+    dq 0          ; reserved
+
+memory_region_1:
+    dq 0x100000   ; start of usable RAM
+    dq 0x40000000 ; 1 GiB
+    dq 1          ; usable
     
 section .text
 [BITS 32]
@@ -100,32 +106,38 @@ check_long_mode:
 
 ; setup paging
 setup_page_tables:
-    ; L4[0] → L3
+    ; L4[0] -> L3  (identity map)
     mov eax, page_table_l3
     or eax, 0b11                  ; present + writable
-    mov [page_table_l4], eax
+    mov [page_table_l4 + 0*8], eax
 
-    ; L3[0] → L2
+    ; L4[256] -> L3 (higher-half phys mapping)
+    ; PHYS_OFFSET = 0xFFFF800000000000
+    mov eax, page_table_l3
+    or eax, 0b11
+    mov [page_table_l4 + 256*8], eax
+
+    ; L3[0] -> L2
     mov eax, page_table_l2
     or eax, 0b11
-    mov [page_table_l3], eax
+    mov [page_table_l3 + 0*8], eax
 
-    ; L2[0] → L1
+    ; L2[0] -> L1
     mov eax, page_table_l1
     or eax, 0b11
-    mov [page_table_l2], eax
+    mov [page_table_l2 + 0*8], eax
 
     ; Map first 2 MiB using 4 KiB pages
-    mov ecx, 1
+    xor ecx, ecx                  ; start at page 0
 
 .map_l1:
     mov eax, ecx
-    shl eax, 12                   ; ecx * 4096
+    shl eax, 12                   ; phys = ecx * 4096
     or eax, 0b11                  ; present + writable
     mov [page_table_l1 + ecx*8], eax
 
     inc ecx
-    cmp ecx, 512
+    cmp ecx, 512                  ; 512 * 4KiB = 2MiB
     jne .map_l1
 
     ret

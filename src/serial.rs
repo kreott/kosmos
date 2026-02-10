@@ -39,3 +39,23 @@ macro_rules! serial_println {
     ($fmt:expr, $($arg:tt)*) => ($crate::serial_print!(
         concat!($fmt, "\n"), $($arg)*));
 }
+/// Print a u64 in hexadecimal to the serial port, no formatting macros.
+pub fn serial_print_hex_u64(mut n: u64) {
+    use crate::serial::SERIAL1;
+    let mut buf = [b'0'; 16];
+
+    for i in (0..16).rev() {
+        let digit = (n & 0xF) as u8;
+        buf[i] = match digit {
+            0..=9 => b'0' + digit,
+            10..=15 => b'A' + (digit - 10),
+            _ => b'?', // should never happen
+        };
+        n >>= 4;
+    }
+
+    let mut serial = SERIAL1.lock();
+    for &b in &buf {
+        serial.send(b);
+    }
+}

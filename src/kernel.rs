@@ -4,7 +4,7 @@
 
 extern crate alloc; // rust alloc
 
-use core::{clone, panic::PanicInfo}; // panic info structure
+use core::panic::PanicInfo; // panic info structure
 use crate::{bootinfo::BootInfo}; // boot info structure
 use alloc::{boxed::Box, vec, vec::Vec, rc::Rc}; // stuff
 
@@ -47,7 +47,7 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     println!("Hello World{}", "!");
     serial_print!("Hello Serial{}", "!");
 
-    use x86_64::{structures::paging::Page, VirtAddr};
+    use x86_64::VirtAddr;
     use crate::memory::BootInfoFrameAllocator;
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset.into_option().unwrap());
@@ -58,10 +58,11 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     allocator::init_heap(&mut mapper, &mut frame_allocator)
         .expect("heap initialization failed");
 
+    println!("We got out of initializing the heap");
+    
     // allocate number on heap
     let heap_value = Box::new(41);
-    println!("heap value at {:p}", heap_value);
-
+    println!("heap value at {:p}", &*heap_value);
     // create vector
     let mut vec = Vec::new();
     for i in 0..500 {
@@ -75,6 +76,7 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     println!("current reference count is {}", Rc::strong_count(&cloned_reference));
     core::mem::drop(reference_counted);
     println!("reference count is {} now", Rc::strong_count(&cloned_reference)); 
+    
 
     println!("It did not crash! :D");
     hlt_loop();
