@@ -2,20 +2,24 @@
 #![no_main]
 #![feature(abi_x86_interrupt)]
 
+// imports
 extern crate alloc; // rust alloc
-
 use core::panic::PanicInfo; // panic info structure
-use crate::{bootinfo::BootInfo}; // boot info structure
+use crate::{bootinfo::BootInfo, task::keyboard}; // boot info structure
 use alloc::{boxed::Box, vec, vec::Vec, rc::Rc}; // stuff
+use crate::task::{Task, simple_executor::SimpleExecutor};
+use x86_64::VirtAddr; // virtual address struct
+use crate::memory::BootInfoFrameAllocator; // boof info frame allocator
 
-
+// modules
 pub mod interrupts; // interrupt handling
 pub mod serial; // serial output
 pub mod vga; // vga output
 pub mod gdt; // gdt handling
 pub mod bootinfo; // boot info sent to _start()
 pub mod memory; // memory management
-pub mod allocator;
+pub mod allocator; // memory allocator
+pub mod task; // async tasks
 
 
 #[panic_handler]
@@ -42,14 +46,7 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
 
     // initialize important things like gdt and interrupts
     init();
-
-    vgaclear!();
-    println!("Hello World{}", "!");
-    serial_print!("Hello Serial{}", "!");
-
-    use x86_64::VirtAddr;
-    use crate::memory::BootInfoFrameAllocator;
-
+    // initialize heap
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset.into_option().unwrap());
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator = unsafe {
@@ -57,26 +54,15 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     };
     allocator::init_heap(&mut mapper, &mut frame_allocator)
         .expect("heap initialization failed");
+    println!("initialized heap");
 
-    println!("We got out of initializing the heap");
+    vgaclear!();
+    println!("Hello World{}", "!");
+    serial_print!("Hello Serial{}", "!");
     
-    // allocate number on heap
-    let heap_value = Box::new(41);
-    println!("heap value at {:p}", &*heap_value);
-    // create vector
-    let mut vec = Vec::new();
-    for i in 0..500 {
-        vec.push(i);
-    }
-    println!("vec at {:p}", vec.as_slice());
-
-    // create a reference counted vector. will be freed when count reaches 0
-    let reference_counted = Rc::new(vec![1, 2, 3]);
-    let cloned_reference = reference_counted.clone();
-    println!("current reference count is {}", Rc::strong_count(&cloned_reference));
-    core::mem::drop(reference_counted);
-    println!("reference count is {} now", Rc::strong_count(&cloned_reference)); 
-    
+    let mut executor = SimpleExecutor::new();
+    executor.spawn(Task::new(keyboard::print_keypresses()));
+    executor.run();
 
     println!("It did not crash! :D");
     hlt_loop();
