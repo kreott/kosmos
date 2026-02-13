@@ -1,10 +1,14 @@
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
-use crate::{println, print};
+use crate::{println};
 use crate::gdt;
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spin;
 use x86_64::structures::idt::PageFaultErrorCode;
+use core::sync::atomic::AtomicU64;
+
+/// Counts the number of timer ticks since boot
+pub static TIMER_TICKS: AtomicU64 = AtomicU64::new(0);
 
 // pic setup
 pub const PIC_1_OFFSET: u8 = 32;
@@ -78,7 +82,7 @@ extern "x86-interrupt" fn double_fault_handler(
 extern "x86-interrupt" fn timer_interrupt_handler(
     _stack_frame: InterruptStackFrame) 
 {
-    print!(".");
+    crate::timer::tick();
 
     unsafe {
         PICS.lock()
@@ -90,7 +94,7 @@ extern "x86-interrupt" fn timer_interrupt_handler(
 extern "x86-interrupt" fn keyboard_interrupt_handler(
     _stack_frame: InterruptStackFrame)
 {
-    use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+    use pc_keyboard::{layouts, HandleControl, Keyboard, ScancodeSet1};
     use spin::Mutex;
     use x86_64::instructions::port::Port;
 
@@ -104,7 +108,10 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(
     let mut port = Port::new(0x60);
 
     let scancode: u8 = unsafe { port.read() };
-    crate::task::keyboard::add_scancode(scancode);
+    use crate::task::keyboard;
+
+    keyboard::add_ps2_scancode(scancode);
+    keyboard::add_usb_scancode(scancode);
 
     unsafe {
         PICS.lock()

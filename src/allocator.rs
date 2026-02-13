@@ -70,9 +70,9 @@ impl BootInfoFrameAllocator {
                     self.next_region += 1;
                 }
             }
-        }
-    }
-}
+        } // loop
+    } // fn next_usable_frame
+} // impl BootInfoFrameAllocator
 
 unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
     fn allocate_frame(&mut self) -> Option<PhysFrame> {
@@ -109,3 +109,24 @@ pub fn init_heap(
 
     Ok(())
 } // fn init_heap
+
+// helpers for getting stats
+pub fn heap_size() -> usize {
+    HEAP_SIZE
+}
+
+pub fn heap_used() -> usize {
+    ALLOCATOR.lock().used()
+}
+
+pub fn heap_free() -> usize {
+    heap_size() - heap_used()
+}
+
+use alloc::string::String;
+use alloc::format;
+pub fn heap_stat() -> String {
+    let used_kib = heap_used() / 1024;
+    let total_kib = HEAP_SIZE / 1024;
+    format!("Heap: {} / {} KiB", used_kib, total_kib)
+}

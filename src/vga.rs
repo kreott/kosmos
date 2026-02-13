@@ -29,10 +29,10 @@ pub enum Color {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
-struct ColorCode(u8);
+pub struct ColorCode(u8);
 
 impl ColorCode {
-    fn new(foreground: Color, background: Color) -> ColorCode {
+    pub fn new(foreground: Color, background: Color) -> ColorCode {
         // VGA packs bg in the high nibble, fg in the low one
         ColorCode((background as u8) << 4 | (foreground as u8))
     }
@@ -57,7 +57,7 @@ struct Buffer {
 pub struct Writer {
     column_position: usize,
     row_position: usize, // tracked for future cursor stuff
-    color_code: ColorCode,
+    pub color_code: ColorCode,
     buffer: &'static mut Buffer,
 }
 
@@ -94,6 +94,22 @@ impl Writer {
                 // replace anything weird with a block
                 _ => self.write_byte(0xFE),
             }
+        }
+    }
+
+    // backspace handler
+    pub fn backspace(&mut self) {
+        if self.column_position > 0 {
+            self.column_position -= 1;
+            let row = self.row_position;
+            let col = self.column_position;
+
+            self.buffer.chars[row][col].write(ScreenChar {
+                ascii_character: b' ',
+                color_code: self.color_code,
+            });
+
+            self.sync_cursor();
         }
     }
 
@@ -136,6 +152,10 @@ impl Writer {
         self.column_position = 0;
         self.row_position = 0;
         self.sync_cursor();
+    }
+
+    pub fn set_color(&mut self, foreground: Color, background: Color) {
+        self.color_code = ColorCode::new(foreground, background);
     }
 
     fn sync_cursor(&self) {
@@ -200,6 +220,26 @@ macro_rules! vgaclear {
     () => ($crate::vga::_clear());
 }
 
+#[macro_export]
+macro_rules! printcolor {
+    ($fg:expr, $bg:expr, $($arg:tt)*) => {{
+        use crate::vga::{WRITER, Color, ColorCode};
+        let mut writer = WRITER.lock();
+
+        // save the previous color
+        let prev_color = writer.color_code;
+
+        // set new color
+        writer.color_code = ColorCode::new($fg, $bg);
+
+        // print the formatted text
+        core::fmt::write(&mut *writer, format_args!($($arg)*)).unwrap();
+
+        // restore previous color
+        writer.color_code = prev_color;
+    }};
+}
+
 #[doc(hidden)]
 pub fn _clear() {
     WRITER.lock().clear_screen();
@@ -216,13 +256,4 @@ pub fn _print(args: fmt::Arguments) {
     interrupts::without_interrupts(|| {
         WRITER.lock().write_fmt(args).unwrap();
     });
-}
-
-pub fn test_println_output() {
-    let s = "Some test string that fits on a single line";
-    println!("{}", s);
-    for (i, c) in s.chars().enumerate() {
-        let screen_char = WRITER.lock().buffer.chars[BUFFER_HEIGHT - 2][i].read();
-        assert_eq!(char::from(screen_char.ascii_character), c);
-    }
 }

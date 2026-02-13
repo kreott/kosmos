@@ -5,11 +5,11 @@
 // imports
 extern crate alloc; // rust alloc
 use core::panic::PanicInfo; // panic info structure
-use crate::{bootinfo::BootInfo, task::keyboard}; // boot info structure
-use alloc::{boxed::Box, vec, vec::Vec, rc::Rc}; // stuff
-use crate::task::{Task, simple_executor::SimpleExecutor};
+use crate::bootinfo::BootInfo; // boot info structure
+use crate::task::{Task, keyboard};
 use x86_64::VirtAddr; // virtual address struct
 use crate::memory::BootInfoFrameAllocator; // boof info frame allocator
+use crate::task::executor::Executor;
 
 // modules
 pub mod interrupts; // interrupt handling
@@ -20,6 +20,7 @@ pub mod bootinfo; // boot info sent to _start()
 pub mod memory; // memory management
 pub mod allocator; // memory allocator
 pub mod task; // async tasks
+pub mod timer;
 
 
 #[panic_handler]
@@ -37,6 +38,7 @@ pub fn hlt_loop() -> ! {
 pub fn init() {
     gdt::init(); // init gdt
     interrupts::init_idt(); // init idt
+    timer::init();
     unsafe { interrupts::PICS.lock().initialize() }; // init PICS
     x86_64::instructions::interrupts::enable(); // enable interrupts
 }
@@ -44,8 +46,12 @@ pub fn init() {
 #[unsafe(no_mangle)] // dont mangle the name of this function
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
 
+    // clear screen
+    vgaclear!();
+
     // initialize important things like gdt and interrupts
     init();
+
     // initialize heap
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset.into_option().unwrap());
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
@@ -56,14 +62,15 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
         .expect("heap initialization failed");
     println!("initialized heap");
 
-    vgaclear!();
-    println!("Hello World{}", "!");
-    serial_print!("Hello Serial{}", "!");
-    
-    let mut executor = SimpleExecutor::new();
-    executor.spawn(Task::new(keyboard::print_keypresses()));
-    executor.run();
+    // initialize keyboard driver
+    keyboard::init_keyboard_stream();
 
-    println!("It did not crash! :D");
+    // initialize shell
+    let mut executor = Executor::new();
+    crate::task::shell::spawn_shell(&mut executor);
+    executor.run();
+    // anything past this is unreachable, but good to have as a fallback
+
+    #[allow(unreachable_code)]
     hlt_loop();
 } // fn kernel_main
