@@ -1,20 +1,25 @@
-use crate::task::executor::Executor;
-use crate::{Task, vgaclear};
-use crate::task::keyboard::get_line;
-use crate::{print, println};
-use alloc::string::*;
-use crate::printcolor;
-use crate::vga::Color;
-use crate::timer;
-use alloc::format;
+use crate::{
+    Task, 
+    vgaclear, 
+    print, 
+    println, 
+    printcolor, 
+    vga::Color, 
+    timer, 
+    allocator,
+    system::reboot,
+    task::{
+        executor::Executor,
+        keyboard::get_line,
+    }
+};
+use alloc::{
+    boxed::Box, 
+    format, 
+    string::*, 
+    vec::Vec
+};
 use raw_cpuid::CpuId;
-use crate::allocator;
-
-enum Command {
-    Fetch,
-    Clear,
-    Unknown,
-}
 
 // New star ASCII art
 const STAR_ASCII: &[&str] = &[
@@ -29,12 +34,6 @@ const STAR_ASCII: &[&str] = &[
     "          |",
     "    .     '    .",
 ];
-
-const COMMANDS: &[&str] = &[
-    "FETCH",
-    "CLEAR",
-];
-
 
 fn trim_after_ghz(s: &str) -> &str {
     if let Some(pos) = s.find("GHz") {
@@ -123,6 +122,23 @@ fn print_fetch(stats: &[String]) {
     } // for i in 0..total_lines
 } // fn print_fetch
 
+enum Command {
+    Fetch,
+    Clear,
+    HeapTest,
+    Crash,
+    Reboot,
+    Unknown,
+}
+
+const COMMANDS: &[&str] = &[
+    "FETCH",
+    "CLEAR",
+    "HEAPTEST",
+    "CRASH",
+    "REBOOT",
+];
+
 pub fn print_header() {
     printcolor!(Color::White, Color::Blue, "--- Kosmos ---\n\n");
     printcolor!(Color::White, Color::Black, "COMMANDS: ");
@@ -134,10 +150,12 @@ pub fn print_header() {
 
 fn parse_command(input: &str) -> Command {
     match input {
-        s if s.eq_ignore_ascii_case("fetch") => Command::Fetch,
-        s if s.eq_ignore_ascii_case("clear") => Command::Clear,
-        
-        _ => Command::Unknown,
+        s if s.eq_ignore_ascii_case("fetch")    => Command::Fetch,
+        s if s.eq_ignore_ascii_case("clear")    => Command::Clear,
+        s if s.eq_ignore_ascii_case("heaptest") => Command::HeapTest,
+        s if s.eq_ignore_ascii_case("crash")    => Command::Crash,
+        s if s.eq_ignore_ascii_case("reboot")   => Command::Reboot,
+        _                                             => Command::Unknown,
     }
 }
 
@@ -159,12 +177,43 @@ pub async fn shell_task() {
                 vgaclear!();
                 print_header();
             }
+            Command::HeapTest => {
+                let mut count = 0;
+                let mut allocations = Vec::new();
+                loop {
+                    allocations.push(Box::new([0u8; 2048]));
+                    count += 1;
+                    println!("Loop iteration: {}. Total loop memory: {}", count, count * 1024);
+                    if count >= 250 {
+                        let heapstat = allocator::heap_stat();
+                        printcolor!(Color::LightGreen, Color::Black, "Test done, current {}\n", heapstat);
+                        println!("Freeing memory...");
+                        drop(allocations);
+                        println!("Done!");
+                        break;
+                    }
+                }
+            }
+            Command::Crash => {
+                let mut count = 0;
+                let mut allocations = Vec::new();
+                loop {
+                    allocations.push(Box::new([0u8; 10240])); // 10 mb
+                    count += 1;
+                    printcolor!(Color::Red, Color::Black, "Allocating 10 MB...\n");
+                    let heapstat = crate::allocator::heap_stat();
+                    println!("iteration: {}, total {}", count, heapstat);
+                }
+            }
+            Command::Reboot => {
+                reboot();
+            }
             Command::Unknown => {
                 println!("{}: unknown command", input.trim());
                 print!("\n");
             }
-        }
-    }
+        } // match cmd
+    } // loop
 } // async fn shell_task
 
 // Helper to spawn the shell task

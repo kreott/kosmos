@@ -1,8 +1,8 @@
-use core::fmt::{Write, Result, self}; // for Result and stuff
-use volatile::Volatile; // for volatile, dont want to optimize our vga writes away
-use lazy_static::lazy_static; // for lazystatic obviously
-use spin::Mutex; // for mutex
-use x86_64::instructions::port::Port; // for port functionality
+use core::fmt::{Write, Result, self};
+use volatile::Volatile;
+use lazy_static::lazy_static;
+use spin::Mutex;
+use x86_64::instructions::port::Port;
 
 // VGA color values
 #[allow(dead_code)]

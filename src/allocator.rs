@@ -2,7 +2,13 @@ use x86_64::{
     PhysAddr,
     VirtAddr,
     structures::paging::{
-        FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB, PhysFrame, mapper::MapToError
+        FrameAllocator,
+        Mapper, 
+        Page, 
+        PageTableFlags, 
+        Size4KiB, 
+        PhysFrame, 
+        mapper::MapToError,
     }
 };
 use linked_list_allocator::LockedHeap;

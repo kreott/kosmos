@@ -20,7 +20,8 @@ pub mod bootinfo; // boot info sent to _start()
 pub mod memory; // memory management
 pub mod allocator; // memory allocator
 pub mod task; // async tasks
-pub mod timer;
+pub mod timer; // PIT timer
+pub mod system; // system helper functions
 
 
 #[panic_handler]

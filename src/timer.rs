@@ -1,6 +1,5 @@
 use core::sync::atomic::Ordering;
 use x86_64::instructions::port::Port;
-
 use crate::interrupts::TIMER_TICKS;
 
 pub const TIMER_HZ: u64 = 100;
