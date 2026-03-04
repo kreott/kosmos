@@ -29,6 +29,7 @@ run: all
 clean: 
 	rm -rf target
 	rm -rf build
+	rm grub/boot/kernel.bin
 
 
 
