@@ -1,6 +1,18 @@
-use x86_64::{VirtAddr, structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB}};
-use x86_64::PhysAddr;
-use crate::bootinfo::{MemoryRegion, MemoryRegionKind};
+use x86_64::{
+    VirtAddr,
+    PhysAddr,
+    structures::paging::{
+        FrameAllocator, 
+        OffsetPageTable, 
+        PageTable, 
+        PhysFrame, 
+        Size4KiB
+    }
+};
+use crate::bootinfo::{
+    MemoryRegion, 
+    MemoryRegionKind,
+};
 
 
 // Initialize a new OffsetPageTable.

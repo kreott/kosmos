@@ -4,12 +4,17 @@
 
 // imports
 extern crate alloc; // rust alloc
-use core::panic::PanicInfo; // panic info structure
-use crate::bootinfo::BootInfo; // boot info structure
-use crate::task::{Task, keyboard};
 use x86_64::VirtAddr; // virtual address struct
-use crate::memory::BootInfoFrameAllocator; // boof info frame allocator
-use crate::task::executor::Executor;
+use core::panic::PanicInfo; // panic info struct
+use crate::{
+    bootinfo::BootInfo, // bootinfo struct
+    memory::BootInfoFrameAllocator, // boot info frame allocator
+    task::{ // tasks and executor
+        Task, 
+        keyboard,
+        executor::Executor,
+    },
+};
 
 // modules
 pub mod interrupts; // interrupt handling
@@ -30,23 +35,16 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
-pub fn hlt_loop() -> ! {
-    loop {
-        x86_64::instructions::hlt();
-    }
-}
-
 pub fn init() {
-    gdt::init(); // init gdt
+    gdt::init();            // init gdt
     interrupts::init_idt(); // init idt
-    timer::init();
+    timer::init();          // init pit timer
     unsafe { interrupts::PICS.lock().initialize() }; // init PICS
-    x86_64::instructions::interrupts::enable(); // enable interrupts
+    x86_64::instructions::interrupts::enable();      // enable interrupts
 }
 
 #[unsafe(no_mangle)] // dont mangle the name of this function
 pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
-
     // clear screen
     vgaclear!();
 
@@ -61,7 +59,6 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     };
     allocator::init_heap(&mut mapper, &mut frame_allocator)
         .expect("heap initialization failed");
-    println!("initialized heap");
 
     // initialize keyboard driver
     keyboard::init_keyboard_stream();
@@ -75,3 +72,9 @@ pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
     #[allow(unreachable_code)]
     hlt_loop();
 } // fn kernel_main
+
+pub fn hlt_loop() -> ! {
+    loop {
+        x86_64::instructions::hlt();
+    }
+}

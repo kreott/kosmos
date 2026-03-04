@@ -1,9 +1,19 @@
-use super::{Task, TaskId};
-use alloc::{collections::BTreeMap, sync::Arc};
-use core::task::Waker;
+use super::{
+    Task, 
+    TaskId
+};
+use alloc::{
+    collections::BTreeMap,
+    sync::Arc,
+    task::Wake,
+};
+use core::task::{
+    Context, 
+    Poll, 
+    Waker,
+};
 use crossbeam_queue::ArrayQueue;
-use core::task::{Context, Poll};
-use alloc::task::Wake;
+
 
 
 // a custom waker that knows which task to wake
@@ -123,6 +133,6 @@ impl Executor {
                     // task is not ready yet, it will be re-queued by its waker
                 }
             }
-        }
+        } // while let Some(task_id)
     } // fn run_ready_tasks
 } // impl Executor

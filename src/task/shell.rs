@@ -155,7 +155,7 @@ fn parse_command(input: &str) -> Command {
         s if s.eq_ignore_ascii_case("heaptest") => Command::HeapTest,
         s if s.eq_ignore_ascii_case("crash")    => Command::Crash,
         s if s.eq_ignore_ascii_case("reboot")   => Command::Reboot,
-        _                                             => Command::Unknown,
+        _ => Command::Unknown,
     }
 }
 
@@ -209,8 +209,10 @@ pub async fn shell_task() {
                 reboot();
             }
             Command::Unknown => {
+                if input.trim() == "" {
+                    continue;
+                } 
                 println!("{}: unknown command", input.trim());
-                print!("\n");
             }
         } // match cmd
     } // loop

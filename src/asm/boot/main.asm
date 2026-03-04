@@ -127,7 +127,7 @@ setup_page_tables:
     or eax, 0b11
     mov [page_table_l2 + 0*8], eax
 
-    ; Map first 2 MiB using 4 KiB pages
+    ; map first 2 MiB using 4 KiB pages
     xor ecx, ecx                  ; start at page 0
 
 .map_l1:

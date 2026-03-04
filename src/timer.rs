@@ -6,7 +6,7 @@ pub const TIMER_HZ: u64 = 100;
 
 // initialize the PIT
 //
-// Must be called once during kernel init, before enabling interrupts.
+// call once during kernel init, before enabling interrupts.
 pub fn init() {
     let divisor: u16 = (1193182 / TIMER_HZ) as u16;
 
