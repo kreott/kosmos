@@ -31,10 +31,6 @@ pub fn init_keyboard_stream() {
 ///
 /// Must not block or allocate.
 pub(crate) fn add_ps2_scancode(scancode: u8) {
-    if USB_ACTIVE.load(Ordering::Relaxed) {
-        return;
-    }
-
     if let Ok(queue) = PS2_QUEUE.try_get() {
         if queue.push(scancode).is_err() {
             panic!("PS/2 queue full; dropping input");

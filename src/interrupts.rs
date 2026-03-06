@@ -124,7 +124,9 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(
 
     // push scancode into both ps2 and usb queues
     keyboard::add_ps2_scancode(scancode);
-    keyboard::add_usb_scancode(scancode);
+
+    // temporarily remove usb cause it was causing issues
+    //keyboard::add_usb_scancode(scancode);
 
     // notify pic that interrupt is handled
     unsafe {

@@ -1,66 +1,90 @@
 use crate::{
     Task, 
-    vgaclear, 
+    allocator, 
     print, 
-    println, 
     printcolor, 
-    vga::Color, 
+    println, 
     timer, 
-    allocator,
-    system::reboot,
     task::{
         executor::Executor,
         keyboard::get_line,
-    }
+    }, 
+    vga::{
+        Color,
+        set_print_color
+    },
 };
 use alloc::{
-    boxed::Box, 
     format, 
     string::*, 
-    vec::Vec
 };
 use raw_cpuid::CpuId;
 
-// New star ASCII art
-const STAR_ASCII: &[&str] = &[
-    "  .       .",
-    "       .  |  .",
-    "        \\ | /    +",
-    "*        \\|/",
-    "    --==> * <==--   '",
-    "   +     /|\\   .",
-    "        / | \\",
-    ".      '  |  '       *",
-    "          |",
-    "    .     '    .",
+// STATS AND INFO
+
+const STAR_ASCII: &[&str] = & [
+    "           +       o      .   ",
+    "   *           *              ",
+    "  +  .-.   o            '     ",
+    "'   ( (  .         '      o   ",
+    "     `-'      .    '* .   .   ",
+    " '         / '    .   '       ",
+    " o        /     |          .:'",
+    "  o  |   * .  - o -+ . _.::'  ",
+    "   --o--        |     (_.'    ",
+    "   . |              ' '   |   ",
+    " '            +o        - o -o",
+    " .        .  o    '  *    |   ",
 ];
 
-fn trim_after_ghz(s: &str) -> &str {
-    if let Some(pos) = s.find("GHz") {
-        &s[..pos + 3]
-    } else {
-        s
+fn print_fetch(stats: &[String]) {
+    let art_lines = STAR_ASCII;
+    let total_lines = art_lines.len().max(stats.len());
+
+    for i in 0..total_lines {
+        let art = art_lines.get(i).unwrap_or(&"");
+        let stat = stats.get(i).map(|s| s.as_str()).unwrap_or("");
+
+        // print art with colors
+        for c in art.chars() {
+            let color = get_art_color(c);
+            printcolor!(color, Color::Black, "{}", c);
+        }
+
+        // print stat right after art
+        println!("{}", stat);
+    }
+} 
+
+fn get_art_color(c: char) -> Color {
+    match c {
+        '*' | 'o'             => Color::LightGray,     // stars/orbs
+        '+' | '-' | '|' | '/' => Color::Yellow,    // lines/structure
+        '.' | '\''            => Color::LightCyan,  // sparkles/twinkles
+        '_' | '(' | ')'       => Color::LightBlue, // details
+        _ => Color::Black, // spaces/background
     }
 }
 
 fn cpuinfo() -> String {
     let cpuid = CpuId::new();
-
-    let brand_string = cpuid
+    
+    let brand = cpuid
         .get_processor_brand_string()
         .map(|b| b.as_str().to_string())
         .unwrap_or_else(|| "Unknown CPU".to_string());
-
-    let trimmed = trim_after_ghz(&brand_string.as_str());
-
+    
+    let trimmed = brand
+        .split_once("GHz")
+        .map(|(before, _)| format!("{}GHz", before))
+        .unwrap_or(brand.clone());
+    
     format!("CPU: {}", trimmed)
 }
 
 pub fn get_stats() -> [String; 4] {    
-    /*** stats ***/
-
     // os name
-    let os = "OS: Kosmos v0.0.1".to_string();
+    let os = "OS: Kosmos v0.0.2".to_string();
 
     // uptime
     let seconds = timer::uptime_seconds();
@@ -87,40 +111,14 @@ pub fn get_stats() -> [String; 4] {
     ]
 } // fn get_stats
 
-/// Prints the ASCII art with gradient colors and stats aligned
-fn print_fetch(stats: &[String]) {
-    let art_lines = STAR_ASCII;
-    let total_lines = art_lines.len().max(stats.len());
-    let art_width = 22;
+fn print_header() {
+    set_print_color(Color::White, Color::Blue);
+    print!("--- Kosmos ---\n\n");
+    set_print_color(Color::White, Color::Black);
+    println!("type 'help' for a list of commands");
+}
 
-    for i in 0..total_lines {
-        let art = art_lines.get(i).unwrap_or(&"");
-        let stat = stats.get(i).map(|s| s.as_str()).unwrap_or("");
-
-        let mut col = 0;
-        // print each character of the art with color
-        for c in art.chars() {
-            let color = match c {
-                '*' | '>' | '<' | '\\' | '/' | '=' => Color::White,       // core stars
-                ':' | '!' | '|' | '-' | '\'' | '+' => Color::Yellow, // highlights / lines
-                '.' => Color::LightRed,                // twinkles
-                _ => Color::Black,                     // spaces / background
-            };
-
-            printcolor!(color, Color::Black, "{}", c);
-            col += 1;
-        }
-
-        // pad spaces to reach art_width + 10 padding
-        while col < art_width + 3 {
-            printcolor!(Color::Black, Color::Black, " ");
-            col += 1;
-        }
-
-        // print the stat
-        println!("{}", stat);
-    } // for i in 0..total_lines
-} // fn print_fetch
+// INPUT & COMMANDS
 
 enum Command {
     Fetch,
@@ -128,97 +126,116 @@ enum Command {
     HeapTest,
     Crash,
     Reboot,
+    Help,
     Unknown,
 }
 
-const COMMANDS: &[&str] = &[
-    "FETCH",
-    "CLEAR",
-    "HEAPTEST",
-    "CRASH",
-    "REBOOT",
-];
+// COMMANDS
+mod commands {
+    use crate::vga::Color;
+    use crate::vga::set_print_color;
+    use crate::{vgaclear, system, println};
+    use crate::task::shell::{get_stats, print_fetch, print_header};
+    use crate::printcolor;
+    use crate::allocator;
+    use alloc::vec::Vec;
+    use alloc::boxed::Box;
 
-pub fn print_header() {
-    printcolor!(Color::White, Color::Blue, "--- Kosmos ---\n\n");
-    printcolor!(Color::White, Color::Black, "COMMANDS: ");
-    for cmd in COMMANDS {
-        printcolor!(Color::Yellow, Color::Black, "{} ", cmd);
+    pub fn fetch() {
+        print_fetch(get_stats().as_ref());
     }
-    print!("\n");
+
+    pub fn clear() {
+        vgaclear!();
+        print_header();
+    }
+
+    pub fn heaptest() {
+        const ALLOC_SIZE: usize = 2048;
+        const TEST_ITERATIONS: usize = 250;
+
+        let mut allocations = Vec::new();
+
+        for i in 1..=TEST_ITERATIONS {
+            allocations.push(Box::new([0u8; ALLOC_SIZE]));
+            let total_mb = i * ALLOC_SIZE;
+            println!("Iteration: {}. Total: {} MB", i, total_mb);
+        }
+
+        let heapstat = allocator::heap_stat();
+        printcolor!(Color::LightGreen, Color::Black, "Test done: {}\n", heapstat);
+        println!("Freeing memory...");
+        drop(allocations);
+        println!("Done!");
+    }
+
+    pub fn crash() {
+        let mut count = 0;
+        let mut allocations = Vec::new();
+        loop {
+            allocations.push(Box::new([0u8; 10240])); // 10 mb
+            count += 1;
+            printcolor!(Color::Red, Color::Black, "Allocating 10 MB...\n");
+            let heapstat = crate::allocator::heap_stat();
+            println!("iteration: {}, total {}", count, heapstat);
+        }
+    }
+
+    pub fn reboot() {
+        system::reboot();
+    }
+
+    pub fn help() {
+        set_print_color(Color::Yellow, Color::Black);
+        println!("    fetch");
+        println!("    clear");
+        println!("    heap test");
+        println!("    crash");
+        println!("    reboot");
+        set_print_color(Color::White, Color::Black);
+    }
+
+    pub fn unknown_command(input: &str) {
+        if input.trim() == "" {
+            return;
+        }
+        println!("unknown command: {}", input)
+    }
+} // mod commands
+
+
+fn parse_input(input: &String) -> Command {
+    match input.trim().to_lowercase().as_str() {
+        "fetch"     => Command::Fetch,
+        "clear"     => Command::Clear,
+        "heap test"  => Command::HeapTest,
+        "crash"     => Command::Crash,
+        "reboot"    => Command::Reboot,
+        "help"      => Command::Help,
+        _           => Command::Unknown,
+    }
 }
 
-fn parse_command(input: &str) -> Command {
-    match input {
-        s if s.eq_ignore_ascii_case("fetch")    => Command::Fetch,
-        s if s.eq_ignore_ascii_case("clear")    => Command::Clear,
-        s if s.eq_ignore_ascii_case("heaptest") => Command::HeapTest,
-        s if s.eq_ignore_ascii_case("crash")    => Command::Crash,
-        s if s.eq_ignore_ascii_case("reboot")   => Command::Reboot,
-        _ => Command::Unknown,
-    }
-}
-
-// main shell loop
-pub async fn shell_task() {
+async fn shell_task() {
     print_header();
     loop {
         print!("kosmos> ");
-        let input: String = get_line().await; // wait for input
-        let cmd = parse_command(&input.trim());
-
+        let input = get_line().await;
+        let cmd = parse_input(&input);
+        
+       
         match cmd {
-            Command::Fetch => {
-                let stats = get_stats();
-                print_fetch(&stats);
-                print!("\n");
-            }
-            Command::Clear => {
-                vgaclear!();
-                print_header();
-            }
-            Command::HeapTest => {
-                let mut count = 0;
-                let mut allocations = Vec::new();
-                loop {
-                    allocations.push(Box::new([0u8; 2048]));
-                    count += 1;
-                    println!("Loop iteration: {}. Total loop memory: {}", count, count * 1024);
-                    if count >= 250 {
-                        let heapstat = allocator::heap_stat();
-                        printcolor!(Color::LightGreen, Color::Black, "Test done, current {}\n", heapstat);
-                        println!("Freeing memory...");
-                        drop(allocations);
-                        println!("Done!");
-                        break;
-                    }
-                }
-            }
-            Command::Crash => {
-                let mut count = 0;
-                let mut allocations = Vec::new();
-                loop {
-                    allocations.push(Box::new([0u8; 10240])); // 10 mb
-                    count += 1;
-                    printcolor!(Color::Red, Color::Black, "Allocating 10 MB...\n");
-                    let heapstat = crate::allocator::heap_stat();
-                    println!("iteration: {}, total {}", count, heapstat);
-                }
-            }
-            Command::Reboot => {
-                reboot();
-            }
-            Command::Unknown => {
-                if input.trim() == "" {
-                    continue;
-                } 
-                println!("{}: unknown command", input.trim());
-            }
-        } // match cmd
-    } // loop
-} // async fn shell_task
+            Command::Fetch      => commands::fetch(),
+            Command::Clear      => commands::clear(),
+            Command::HeapTest   => commands::heaptest(),
+            Command::Crash      => commands::crash(),
+            Command::Reboot     => commands::reboot(),
+            Command::Help       => commands::help(),
+            Command::Unknown    => commands::unknown_command(&input.as_str()),
+        }
+    }
+}
 
-// Helper to spawn the shell task
 pub fn spawn_shell(executor: &mut Executor) {
-    executor.spawn(Task::new(shell_task()));
+    executor.spawn(Task::new(shell_task()))
 }

@@ -3,7 +3,6 @@ use alloc::boxed::Box;
 use core::task::{Context, Poll};
 use core::sync::atomic::{AtomicU64, Ordering};
 
-pub mod simple_executor;
 pub mod keyboard;
 pub mod executor;
 pub mod shell;

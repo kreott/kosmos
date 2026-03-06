@@ -183,6 +183,10 @@ fn update_hardware_cursor(row: usize, col: usize) {
     }
 }
 
+pub fn set_print_color(fg: Color, bg: Color) {
+    WRITER.lock().set_color(fg, bg);
+}
+
 // lets Writer work with write! / format_args!
 impl Write for Writer {
     fn write_str(&mut self, s: &str) -> Result {
