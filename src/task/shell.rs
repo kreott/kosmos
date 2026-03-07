@@ -2,7 +2,6 @@ use crate::{
     Task, 
     allocator, 
     print, 
-    printcolor, 
     println, 
     timer, 
     task::{
@@ -23,18 +22,16 @@ use raw_cpuid::CpuId;
 // STATS AND INFO
 
 const STAR_ASCII: &[&str] = & [
-    "           +       o      .   ",
-    "   *           *              ",
-    "  +  .-.   o            '     ",
-    "'   ( (  .         '      o   ",
-    "     `-'      .    '* .   .   ",
-    " '         / '    .   '       ",
-    " o        /     |          .:'",
-    "  o  |   * .  - o -+ . _.::'  ",
-    "   --o--        |     (_.'    ",
-    "   . |              ' '   |   ",
-    " '            +o        - o -o",
-    " .        .  o    '  *    |   ",
+    r#"                ,      "#,
+    r#"              _/((     "#,
+    r#"     _.---. .'   `\    "#,
+    r#"   .'      `     ^ T=  "#,
+    r#"  /     \       .--'   "#,
+    r#" |      /       )'-.   "#,
+    r#" ; ,   <__..-(   '-.)  "#,
+    r#"  \ \-.__)    ``--._)  "#,
+    r#"   '.'-.__.-.          "#,
+    r#"     '-...-'           "#,
 ];
 
 fn print_fetch(stats: &[String]) {
@@ -47,22 +44,11 @@ fn print_fetch(stats: &[String]) {
 
         // print art with colors
         for c in art.chars() {
-            let color = get_art_color(c);
-            printcolor!(color, Color::Black, "{}", c);
+            print!("{}", c);
         }
 
         // print stat right after art
         println!("{}", stat);
-    }
-} 
-
-fn get_art_color(c: char) -> Color {
-    match c {
-        '*' | 'o'             => Color::LightGray,     // stars/orbs
-        '+' | '-' | '|' | '/' => Color::Yellow,    // lines/structure
-        '.' | '\''            => Color::LightCyan,  // sparkles/twinkles
-        '_' | '(' | ')'       => Color::LightBlue, // details
-        _ => Color::Black, // spaces/background
     }
 }
 
@@ -151,7 +137,7 @@ mod commands {
     }
 
     pub fn heaptest() {
-        const ALLOC_SIZE: usize = 2048;
+        const ALLOC_SIZE: usize = 1048;
         const TEST_ITERATIONS: usize = 250;
 
         let mut allocations = Vec::new();
@@ -171,13 +157,12 @@ mod commands {
 
     pub fn crash() {
         let mut count = 0;
-        let mut allocations = Vec::new();
         loop {
-            allocations.push(Box::new([0u8; 10240])); // 10 mb
+            let _box = Box::new([0u8; 10240]);
+            Box::leak(_box);
             count += 1;
-            printcolor!(Color::Red, Color::Black, "Allocating 10 MB...\n");
-            let heapstat = crate::allocator::heap_stat();
-            println!("iteration: {}, total {}", count, heapstat);
+            printcolor!(Color::LightRed, Color::Black, "Allocating 10 KB...\n");
+            println!("iteration: {}, total {}", count, crate::allocator::heap_stat());
         }
     }
 
@@ -208,7 +193,7 @@ fn parse_input(input: &String) -> Command {
     match input.trim().to_lowercase().as_str() {
         "fetch"     => Command::Fetch,
         "clear"     => Command::Clear,
-        "heap test"  => Command::HeapTest,
+        "heap test" => Command::HeapTest,
         "crash"     => Command::Crash,
         "reboot"    => Command::Reboot,
         "help"      => Command::Help,

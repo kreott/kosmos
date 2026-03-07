@@ -74,22 +74,22 @@ pub fn init_idt() {
 
 // breakpoint exception handler
 extern "x86-interrupt" fn breakpoint_handler(
-    stack_frame: InterruptStackFrame)
-{
+    stack_frame: InterruptStackFrame
+) {
     println!("exception: breakpoint\n{:#?}", stack_frame);
 }
 
 // double fault handler, never returns
 extern "x86-interrupt" fn double_fault_handler(
-    stack_frame: InterruptStackFrame, _error_code: u64) -> !
-{
+    stack_frame: InterruptStackFrame, _error_code: u64
+) -> ! {
     panic!("exception: double fault\n{:#?}", stack_frame);
 }
 
 // timer interrupt handler
 extern "x86-interrupt" fn timer_interrupt_handler(
-    _stack_frame: InterruptStackFrame) 
-{
+    _stack_frame: InterruptStackFrame
+) {
     // increment timer tick count
     crate::timer::tick();
 
@@ -102,8 +102,8 @@ extern "x86-interrupt" fn timer_interrupt_handler(
 
 // keyboard interrupt handler
 extern "x86-interrupt" fn keyboard_interrupt_handler(
-    _stack_frame: InterruptStackFrame)
-{
+    _stack_frame: InterruptStackFrame
+) {
     use pc_keyboard::{layouts, HandleControl, Keyboard, ScancodeSet1};
     use spin::Mutex;
     use x86_64::instructions::port::Port;
