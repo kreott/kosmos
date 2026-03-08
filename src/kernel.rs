@@ -35,7 +35,7 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
-pub fn init() {
+fn init() {
     gdt::init();            // init gdt
     interrupts::init_idt(); // init idt
     timer::init();          // init pit timer
