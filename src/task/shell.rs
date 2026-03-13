@@ -70,7 +70,8 @@ fn cpuinfo() -> String {
 
 pub fn get_stats() -> [String; 4] {    
     // os name
-    let os = "OS: Kosmos v0.0.2".to_string();
+    let mut os = "OS: ".to_string();
+    os.push_str(crate::system::get_os_version());
 
     // uptime
     let seconds = timer::uptime_seconds();
@@ -137,15 +138,15 @@ mod commands {
     }
 
     pub fn heaptest() {
-        const ALLOC_SIZE: usize = 1048;
+        const ALLOC_SIZE: usize = 1024;
         const TEST_ITERATIONS: usize = 250;
 
         let mut allocations = Vec::new();
 
         for i in 1..=TEST_ITERATIONS {
             allocations.push(Box::new([0u8; ALLOC_SIZE]));
-            let total_mb = i * ALLOC_SIZE;
-            println!("Iteration: {}. Total: {} MB", i, total_mb);
+
+            println!("Iteration: {}. Total: {} KB", i, i);
         }
 
         let heapstat = allocator::heap_stat();

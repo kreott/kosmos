@@ -12,3 +12,7 @@ pub fn reboot() -> ! {
         }
     }
 }
+
+pub fn get_os_version() -> &'static str {
+    "Kosmos v0.0.3"
+}

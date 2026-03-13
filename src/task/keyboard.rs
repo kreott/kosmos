@@ -1,33 +1,22 @@
 use conquer_once::spin::OnceCell;
 use crossbeam_queue::ArrayQueue;
-use core::sync::atomic::AtomicBool;
 use core::{pin::Pin, task::{Poll, Context}};
 use futures_util::stream::{Stream, StreamExt};
-use futures_util::task::{AtomicWaker};
+use futures_util::task::AtomicWaker;
 use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
 use alloc::string::String;
-use crate::task::Ordering;
 use crate::print;
 
 /// PS/2 queue & waker
 static PS2_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
 static PS2_WAKER: AtomicWaker = AtomicWaker::new();
 
-/// USB queue & waker
-static USB_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
-static USB_WAKER: AtomicWaker = AtomicWaker::new();
-
-// USB active flag
-static USB_ACTIVE: AtomicBool = AtomicBool::new(true);
-
-
 /// Run once during kernel init
 pub fn init_keyboard_stream() {
     let _ = PS2_QUEUE.try_init_once(|| ArrayQueue::new(100));
-    let _ = USB_QUEUE.try_init_once(|| ArrayQueue::new(100));
 }
 
-/// Called by the PS/2 or USB keyboard interrupt handler
+/// Called by the PS/2 keyboard interrupt handler
 ///
 /// Must not block or allocate.
 pub(crate) fn add_ps2_scancode(scancode: u8) {
@@ -42,52 +31,25 @@ pub(crate) fn add_ps2_scancode(scancode: u8) {
     }
 }
 
-pub(crate) fn add_usb_scancode(scancode: u8) {
-    if !USB_ACTIVE.load(Ordering::Relaxed) {
-        USB_ACTIVE.store(true, Ordering::Relaxed);
-        return;
-    }
-
-    if let Ok(queue) = USB_QUEUE.try_get() {
-        if queue.push(scancode).is_err() {
-            panic!("USB queue full; dropping input")
-        } else {
-            USB_WAKER.wake();
-        }
-    } else {
-        panic!("USB queue uninitialized");
-    }
-}
-
-// Async stream that merges PS/2 + USB
-pub struct CombinedStream {
+pub struct PS2Stream {
     _private: (),
 }
 
-impl CombinedStream {
+impl PS2Stream {
     pub fn new() -> Self {
-        CombinedStream { _private: () }
+        PS2Stream { _private: () }
     }
 }
 
-impl Stream for CombinedStream {
+impl Stream for PS2Stream {
     type Item = u8;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<u8>> {
-        // try PS/2 first
         if let Ok(queue) = PS2_QUEUE.try_get() {
             if let Some(sc) = queue.pop() {
                 return Poll::Ready(Some(sc));
             }
             PS2_WAKER.register(&cx.waker());
-        }
-
-        // then try USB
-        if let Ok(queue) = USB_QUEUE.try_get() {
-            if let Some(sc) = queue.pop() {
-                return Poll::Ready(Some(sc));
-            }
-            USB_WAKER.register(&cx.waker());
         }
 
         Poll::Pending
@@ -96,7 +58,7 @@ impl Stream for CombinedStream {
 
 // Read a line from the keyboard until Enter is pressed
 pub async fn get_line() -> String {
-    let mut scancodes = CombinedStream::new();
+    let mut scancodes = PS2Stream::new();
     let mut keyboard = Keyboard::new(
         ScancodeSet1::new(),
         layouts::Us104Key,
@@ -131,6 +93,7 @@ pub async fn get_line() -> String {
                 }
             }
         }
-    } // loop
+    }
+    
     line
-} // async fn get_line
+}
